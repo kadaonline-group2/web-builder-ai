@@ -1,3 +1,5 @@
+from __future__ import annotations
+import copy
 import os
 import json
 import re
@@ -58,7 +60,7 @@ Output kamu HARUS berupa SATU objek JSON valid saja. Ini instruksi paling pentin
     "story": "string",
     "highlights": ["string", "..."]
   },
-  "services": [
+  "services_products": [
     { "name": "string", "description": "string", "priceEstimate": "string" }
   ],
   "testimonials": [
@@ -74,7 +76,7 @@ Output kamu HARUS berupa SATU objek JSON valid saja. Ini instruksi paling pentin
 Aturan spesifik per field:
 - "templateId": pilih "template-fnb" untuk Kuliner/F&B, "template-services" untuk
   Jasa/Konsultan, "template-retail" untuk produk fisik/retail.
-- "services": minimal 3 item. Jika pengguna hanya sebut 1-2, tambahkan item
+- "services_products": minimal 3 item. Jika pengguna hanya sebut 1-2, tambahkan item
   relevan lainnya secara wajar.
 - "testimonials": minimal 2 item. Jika tidak ada testimoni asli dari pengguna,
   buat contoh review positif yang realistis (jangan berlebihan/hiperbolik).
@@ -122,7 +124,7 @@ Output kamu HARUS berupa SATU objek JSON valid berisi HANYA field yang berubah
 5. Struktur nested harus tetap mengikuti path skema asli, contoh:
    - Ubah warna -> { "theme": { "primaryColor": "#RRGGBB" } }
    - Ubah headline -> { "hero": { "title": "string baru" } }
-   - Tambah 1 item layanan -> kembalikan SELURUH array "services" yang sudah
+   - Tambah 1 item layanan -> kembalikan SELURUH array "services_products" yang sudah
      diperbarui (karena array harus diganti utuh, bukan di-append oleh sistem).
    - Hapus section (misal testimoni) -> kembalikan array kosong: "testimonials": []
      (JANGAN hapus key-nya).
@@ -148,6 +150,44 @@ Current WebsiteState (JSON):
 Instruksi Revisi dari Pengguna:
 {{user_instruction}}"""
 
+WEBSITE_DEFAULTS = {
+    "templateId": "template-services",
+    "theme": {
+        "primaryColor": "#2563EB",
+        "accentColor": "#1E40AF",
+        "fontFamily": "sans",
+    },
+    "meta": {
+        "businessName": "Nama Bisnis Anda",
+        "category": "Jasa",
+        "tagline": "Solusi terbaik untuk kebutuhan Anda",
+    },
+    "hero": {
+        "title": "Selamat Datang",
+        "subtitle": "Kami hadir untuk membantu Anda",
+        "ctaText": "Hubungi Kami",
+        "ctaWhatsappMessage": "Halo, saya tertarik dengan layanan Anda",
+    },
+    "about": {
+        "story": "Kami adalah bisnis yang berkomitmen untuk memberikan layanan terbaik.",
+        "highlights": ["Berpengalaman", "Terpercaya", "Berkualitas"],
+    },
+    "services_products": [
+        {"name": "Layanan 1", "description": "Deskripsi layanan", "priceEstimate": "Hubungi kami"},
+        {"name": "Layanan 2", "description": "Deskripsi layanan", "priceEstimate": "Hubungi kami"},
+        {"name": "Layanan 3", "description": "Deskripsi layanan", "priceEstimate": "Hubungi kami"},
+    ],
+    "testimonials": [
+        {"customerName": "Pelanggan 1", "review": "Layanan yang sangat baik!"},
+        {"customerName": "Pelanggan 2", "review": "Sangat puas dengan hasilnya."},
+    ],
+    "contact": {
+        "whatsappNumber": "6281234567890",
+        "address": "Alamat bisnis Anda",
+        "instagram": "@bisniskita",
+    },
+}
+
 
 def ask_llm(user_message: str, system_prompt: str = None) -> dict:
     model = os.getenv("LLM_MODEL_NAME", "gpt-4o-mini")
@@ -170,19 +210,105 @@ def revise_website_state(current_state: str, user_instruction: str) -> dict:
     return ask_llm("{}", system_prompt)
 
 
-def validate_website_state(data: dict) -> tuple[bool, str]:
-    required = ["templateId", "theme", "meta", "hero", "about", "services", "contact"]
-    for field in required:
-        if field not in data:
-            return False, f"Missing field: {field}"
+def validate_website_state(data: dict) -> tuple[bool, list[str]]:
+    errors = []
+    try:
+        required = ["templateId", "theme", "meta", "hero", "about", "services_products", "contact"]
+        for field in required:
+            if field not in data:
+                errors.append(field)
 
-    if data["templateId"] not in ["template-services", "template-fnb", "template-retail"]:
-        return False, f"Invalid templateId: {data['templateId']}"
+        if not errors:
+            if data["templateId"] not in ["template-services", "template-fnb", "template-retail"]:
+                errors.append("templateId")
 
-    if len(data.get("services", [])) < 3:
-        return False, "Services must have at least 3 items"
+            theme = data["theme"]
+            if not isinstance(theme, dict):
+                errors.append("theme")
+            else:
+                if not re.match(r"^#([A-Fa-f0-9]{6})$", theme.get("primaryColor", "")):
+                    errors.append("theme.primaryColor")
+                if theme.get("fontFamily") not in ["sans", "serif", "display"]:
+                    errors.append("theme.fontFamily")
 
-    if not re.match(r"^#([A-Fa-f0-9]{6})$", data.get("theme", {}).get("primaryColor", "")):
-        return False, "Invalid primaryColor format"
+            meta = data["meta"]
+            if not isinstance(meta, dict):
+                errors.append("meta")
+            else:
+                for field in ["businessName", "category", "tagline"]:
+                    if not meta.get(field):
+                        errors.append(f"meta.{field}")
 
-    return True, ""
+            hero = data["hero"]
+            if not isinstance(hero, dict):
+                errors.append("hero")
+            else:
+                for field in ["title", "subtitle", "ctaText", "ctaWhatsappMessage"]:
+                    if not hero.get(field):
+                        errors.append(f"hero.{field}")
+
+            about = data["about"]
+            if not isinstance(about, dict):
+                errors.append("about")
+            elif not about.get("story"):
+                errors.append("about.story")
+
+            services = data["services_products"]
+            if not isinstance(services, list):
+                errors.append("services_products")
+            else:
+                if len(services) < 3:
+                    errors.append("services_products")
+                for i, svc in enumerate(services):
+                    if not isinstance(svc, dict):
+                        errors.append(f"services_products[{i}]")
+                    else:
+                        for field in ["name", "description", "priceEstimate"]:
+                            if not svc.get(field):
+                                errors.append(f"services_products[{i}].{field}")
+
+            contact = data["contact"]
+            if not isinstance(contact, dict):
+                errors.append("contact")
+            else:
+                for field in ["whatsappNumber", "address"]:
+                    if not contact.get(field):
+                        errors.append(f"contact.{field}")
+
+    except (AttributeError, TypeError, KeyError):
+        errors.append("malformed_response")
+
+    return len(errors) == 0, errors
+
+
+def merge_defaults(data: dict) -> dict:
+    merged = copy.deepcopy(WEBSITE_DEFAULTS)
+    for key, value in data.items():
+        if key not in merged:
+            continue
+        if isinstance(value, dict) and isinstance(merged[key], dict):
+            merged[key].update({k: v for k, v in value.items() if k in merged[key]})
+        elif isinstance(value, list) and isinstance(merged[key], list):
+            if value:
+                merged[key] = value
+        else:
+            merged[key] = value
+    return merged
+
+
+def generate_website_state(business_desc: str) -> tuple[dict, bool]:
+    try:
+        data = ask_llm(business_desc, GENERATE_SYSTEM_PROMPT)
+        is_valid, _ = validate_website_state(data)
+        if is_valid:
+            return data, False
+
+        data2 = ask_llm(business_desc, GENERATE_SYSTEM_PROMPT)
+        is_valid2, _ = validate_website_state(data2)
+        if is_valid2:
+            return data2, False
+
+        return merge_defaults(data2), True
+
+    except Exception:
+        return merge_defaults(WEBSITE_DEFAULTS), True
