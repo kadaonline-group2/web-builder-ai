@@ -17,3 +17,8 @@ class GenerateResponse(BaseModel):
     testimonials: list = []
     contact: dict
     isFallback: bool = False
+
+
+class ReviseRequest(BaseModel):
+    currentState: dict = Field(..., description="WebsiteState saat ini")
+    instruction: str = Field(..., min_length=1, description="Instruksi revisi dari pengguna")

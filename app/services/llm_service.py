@@ -296,6 +296,21 @@ def merge_defaults(data: dict) -> dict:
     return merged
 
 
+def merge_state(current_state: dict, partial_changes: dict) -> dict:
+    """Merge partial LLM changes into current state."""
+    merged = copy.deepcopy(current_state)
+    for key, value in partial_changes.items():
+        if key not in merged:
+            continue
+        if isinstance(value, dict) and isinstance(merged[key], dict):
+            merged[key].update(value)
+        elif isinstance(value, list) and isinstance(merged[key], list):
+            merged[key] = value
+        else:
+            merged[key] = value
+    return merged
+
+
 def generate_website_state(business_desc: str) -> tuple[dict, bool]:
     try:
         data = ask_llm(business_desc, GENERATE_SYSTEM_PROMPT)
