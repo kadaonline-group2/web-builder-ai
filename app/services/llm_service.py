@@ -354,6 +354,8 @@ def validate_website_state(data: dict) -> tuple[bool, list[str]]:
             else:
                 if not re.match(r"^#([A-Fa-f0-9]{6})$", theme.get("primaryColor", "")):
                     errors.append("theme.primaryColor")
+                if not re.match(r"^#([A-Fa-f0-9]{6})$", theme.get("accentColor", "")):
+                    errors.append("theme.accentColor")
                 if theme.get("fontFamily") not in ["sans", "serif", "display"]:
                     errors.append("theme.fontFamily")
 
@@ -362,7 +364,7 @@ def validate_website_state(data: dict) -> tuple[bool, list[str]]:
                 errors.append("meta")
             else:
                 for field in ["businessName", "category", "tagline"]:
-                    if not meta.get(field):
+                    if not meta.get(field, "").strip():
                         errors.append(f"meta.{field}")
 
             hero = data["hero"]
@@ -370,13 +372,13 @@ def validate_website_state(data: dict) -> tuple[bool, list[str]]:
                 errors.append("hero")
             else:
                 for field in ["title", "subtitle", "ctaText", "ctaWhatsappMessage"]:
-                    if not hero.get(field):
+                    if not hero.get(field, "").strip():
                         errors.append(f"hero.{field}")
 
             about = data["about"]
             if not isinstance(about, dict):
                 errors.append("about")
-            elif not about.get("story"):
+            elif not about.get("story", "").strip():
                 errors.append("about.story")
 
             services = data["services_products"]
@@ -390,15 +392,19 @@ def validate_website_state(data: dict) -> tuple[bool, list[str]]:
                         errors.append(f"services_products[{i}]")
                     else:
                         for field in ["name", "description", "priceEstimate"]:
-                            if not svc.get(field):
+                            if not svc.get(field, "").strip():
                                 errors.append(f"services_products[{i}].{field}")
+
+            testimonials = data.get("testimonials", [])
+            if isinstance(testimonials, list) and len(testimonials) < 2:
+                errors.append("testimonials")
 
             contact = data["contact"]
             if not isinstance(contact, dict):
                 errors.append("contact")
             else:
                 for field in ["whatsappNumber", "address"]:
-                    if not contact.get(field):
+                    if not contact.get(field, "").strip():
                         errors.append(f"contact.{field}")
 
     except (AttributeError, TypeError, KeyError):
