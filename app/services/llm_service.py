@@ -288,6 +288,32 @@ WEBSITE_DEFAULTS = {
 }
 
 
+def sanitize_input(text: str) -> str:
+    """Remove dangerous content and enforce length limit on user input."""
+    text = re.sub(r'<[^>]+>', '', text)
+    text = re.sub(r'javascript:', '', text, flags=re.IGNORECASE)
+    text = ' '.join(text.split())
+    if len(text) > 2000:
+        text = text[:2000]
+    return text.strip()
+
+
+def build_generation_prompt(raw_input: str) -> str:
+    """Sanitize, validate, and wrap user input for generate endpoint."""
+    cleaned = sanitize_input(raw_input)
+    if not cleaned:
+        raise ValueError("Deskripsi bisnis tidak boleh kosong")
+    return f"<USER_DESCRIPTION>\n{cleaned}\n</USER_DESCRIPTION>"
+
+
+def build_revise_prompt(instruction: str) -> str:
+    """Sanitize, validate, and wrap user instruction for revise endpoint."""
+    cleaned = sanitize_input(instruction)
+    if not cleaned:
+        raise ValueError("Instruksi revisi tidak boleh kosong")
+    return f"<USER_INSTRUCTION>\n{cleaned}\n</USER_INSTRUCTION>"
+
+
 def ask_llm(user_message: str, system_prompt: str = None) -> dict:
     model = os.getenv("LLM_MODEL_NAME", "gpt-4o-mini")
     messages = []
@@ -304,8 +330,9 @@ def ask_llm(user_message: str, system_prompt: str = None) -> dict:
 
 
 def revise_website_state(current_state: str, user_instruction: str) -> dict:
+    instruction_msg = build_revise_prompt(user_instruction)
     system_prompt = REVISE_SYSTEM_PROMPT.replace("{{current_state}}", current_state)
-    system_prompt = system_prompt.replace("{{user_instruction}}", user_instruction)
+    system_prompt = system_prompt.replace("{{user_instruction}}", instruction_msg)
     return ask_llm("{}", system_prompt)
 
 
@@ -412,12 +439,13 @@ def merge_state(current_state: dict, partial_changes: dict) -> dict:
 
 def generate_website_state(business_desc: str) -> tuple[dict, bool]:
     try:
-        data = ask_llm(business_desc, GENERATE_SYSTEM_PROMPT)
+        user_msg = build_generation_prompt(business_desc)
+        data = ask_llm(user_msg, GENERATE_SYSTEM_PROMPT)
         is_valid, _ = validate_website_state(data)
         if is_valid:
             return data, False
 
-        data2 = ask_llm(business_desc, GENERATE_SYSTEM_PROMPT)
+        data2 = ask_llm(user_msg, GENERATE_SYSTEM_PROMPT)
         is_valid2, _ = validate_website_state(data2)
         if is_valid2:
             return data2, False
