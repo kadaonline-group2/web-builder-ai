@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 class GenerateRequest(BaseModel):
     businessDescription: str = Field(
-        ..., min_length=1, description="Deskripsi bisnis dalam bahasa Indonesia"
+        ..., min_length=10, max_length=4000, description="Deskripsi bisnis dalam bahasa Indonesia"
     )
 
 
@@ -13,7 +13,7 @@ class GenerateResponse(BaseModel):
     meta: dict
     hero: dict
     about: dict
-    services_products: list
+    services: list
     testimonials: list = []
     contact: dict
     isFallback: bool = False
