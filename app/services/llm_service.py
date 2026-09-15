@@ -8,7 +8,10 @@ from openai import OpenAI
 
 load_dotenv()
 
-_client = OpenAI(api_key=os.getenv("LLM_API_KEY"))
+_client = OpenAI(
+    api_key=os.getenv("LLM_API_KEY"),
+    base_url=os.getenv("LLM_BASE_URL")
+)
 
 MAX_WEBSITE_STATE_TOKENS = 1500  # Largest realistic WebsiteState + 20% padding
 
@@ -165,7 +168,7 @@ def build_revise_prompt(instruction: str) -> str:
 
 
 def ask_llm(user_message: str, system_prompt: str = None, cache_key: str = None) -> dict:
-    model = os.getenv("LLM_MODEL_NAME", "gpt-4o-mini")
+    model = os.getenv("LLM_MODEL_NAME", "openai/gpt-4o-mini")
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
